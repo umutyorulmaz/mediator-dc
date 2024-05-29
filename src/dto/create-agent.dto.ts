@@ -21,7 +21,7 @@ export class CreateAgentDto {
 
   @ApiProperty({
     description: 'Mediator endpoint',
-    example: "http://192.168.2.247:3002",
+    example: "http://mediator.digicred.services:3002",
   })
   endpoint: string;
 
