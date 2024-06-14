@@ -24,6 +24,7 @@
     "@credo-ts/askar": "^0.5.1",
     "@credo-ts/core": "^0.5.1",
     "@credo-ts/node": "^0.5.1",
+    "@credo-ts/push-notifications": "^0.7.1",
     "@hyperledger/aries-askar-nodejs": "^0.2.1",
     "@nestjs/common": "^10.3.8",
     "@nestjs/config": "^3.2.2",
