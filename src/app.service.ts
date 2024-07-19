@@ -219,9 +219,9 @@ export class AppService {
         } else {
           console.log("Connection status", payload.connectionRecord);
         }
-        await this.agent.modules.pushNotificationsFcm.getDeviceInfo(
-          "a-valid-connection-id"
-        );
+        // await this.agent.modules.pushNotificationsFcm.getDeviceInfo(
+        //   "a-valid-connection-id"
+        // );
       }
     );
   };
