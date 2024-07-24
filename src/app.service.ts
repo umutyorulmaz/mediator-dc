@@ -1,4 +1,5 @@
-import { Injectable } from "@nestjs/common";
+//app.service.ts
+import { Injectable, Inject } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { CreateAgentDto } from "./dto/create-agent.dto";
 import {
@@ -10,6 +11,8 @@ import {
   MediatorModule,
   InitConfig,
   WsOutboundTransport,
+  AgentContextProvider,
+  InjectionSymbols,
 } from "@credo-ts/core";
 import {
   ProofEventTypes,
@@ -37,6 +40,8 @@ import {
   PushNotificationsApnsModule,
   PushNotificationsFcmModule,
 } from "@credo-ts/push-notifications";
+import { PushNotificationsFcmHandler } from "./handlers/push-notifications-fcm.handler";
+import { FirebaseService } from "./firebase/firebase.service";
 
 @Injectable()
 export class AppService {
@@ -44,7 +49,13 @@ export class AppService {
   agent: Agent;
   socketServer: Server;
 
-  constructor(private configService: ConfigService) {}
+  constructor(
+    private configService: ConfigService,
+    private pushNotificationsFcmHandler: PushNotificationsFcmHandler,
+    @Inject(InjectionSymbols.AgentContextProvider)
+    private agentContextProvider: AgentContextProvider,
+    private firebaseService: FirebaseService
+  ) {}
 
   async startAgent(createAgentDto: CreateAgentDto): Promise<string> {
     console.log("Agent DTO=", createAgentDto);
@@ -115,33 +126,6 @@ export class AppService {
     await this.agent.initialize().catch(console.error);
     console.log("Agent initialized");
 
-    // To send apns device info to another agent you have to acquire the device token and send it.
-    // await this.agent.modules.pushNotificationsApns.sendDeviceInfo(
-    //   "a-valid-connection-id",
-    //   {
-    //     deviceToken:
-    //       "fArXyVZHSpiGdzGZXdo7UB:APA91bHdGgyxDyGvM4JmdacgZ5C9HYvh-HhISJp9Q2CSm_BMK2u_PwymKXZOlKlkcMmiIYeeVRQWkx4_T4U-oArayxX6HMyd8l3cvwtVo2MROv6DX_rGbefLzhQCZqK1e3Xh4DKPEU16",
-    //   }
-    // );
-
-    // // To get the device info and the used service back from the other agent
-    // await this.agent.modules.pushNotificationsApns.getDeviceInfo(
-    //   "a-valid-connection"
-    // );
-
-    // /* -- fcm / Android -- */
-
-    //To send fcm, primarily Android, device info to another agent you have to acquire the device token and send it.
-    // await this.agent.modules.pushNotificationsFcm.sendDeviceInfo(
-    //   "a-valid-connection-id",
-    //   {
-    //     deviceToken:
-    //       "fArXyVZHSpiGdzGZXdo7UB:APA91bHdGgyxDyGvM4JmdacgZ5C9HYvh-HhISJp9Q2CSm_BMK2u_PwymKXZOlKlkcMmiIYeeVRQWkx4_T4U-oArayxX6HMyd8l3cvwtVo2MROv6DX_rGbefLzhQCZqK1e3Xh4DKPEU16",
-    //   }
-    // );
-
-    //To get the device info and the used service back from the other agent
-
     httpInboundTransport.server?.on("upgrade", (request, socket, head) => {
       this.socketServer.handleUpgrade(
         request,
@@ -152,8 +136,21 @@ export class AppService {
         }
       );
     });
+    // Register the handler
+    // this.agent.dependencyManager.registerMessageHandlers([
+    //   this.pushNotificationsFcmHandler,
+    // ]);
+    // console.log("Message handler registered");
+
+    // Initialize FirebaseService with the agent
+    await this.firebaseService.initializeWithAgent(this.agent);
 
     return "OK";
+  }
+
+  // This is the method that exposes the agent
+  getAgent(): Agent {
+    return this.agent;
   }
 
   async createInvitation(): Promise<String> {
@@ -214,14 +211,9 @@ export class AppService {
         if (payload.connectionRecord.state === DidExchangeState.Completed) {
           // the connection is now ready for usage in other protocols!
           console.log("Connection completed", payload.connectionRecord);
-          //this.afjAgent.connection_id = payload.connectionRecord.id
-          //process.exit(0)
         } else {
           console.log("Connection status", payload.connectionRecord);
         }
-        // await this.agent.modules.pushNotificationsFcm.getDeviceInfo(
-        //   "a-valid-connection-id"
-        // );
       }
     );
   };
