@@ -16,10 +16,11 @@ import {
   PushNotificationsFcmApi,
   PushNotificationsApnsApi,
 } from "@credo-ts/push-notifications";
+import { PushNotificationsFcmDeviceInfoMessage } from "@credo-ts/push-notifications";
 
 interface DeviceTokenInfo {
-  token: string;
-  platform: string;
+  deviceToken: string;
+  devicePlatform: string;
   status?: "processed" | "unprocessed";
 }
 
@@ -87,10 +88,12 @@ export class FirebaseService implements OnModuleInit {
   //we may eventually merge with saveDeviceToken
   async handleSetDeviceInfo(
     connectionId: string,
-    message: PushNotificationsFcmSetDeviceInfoMessage
+    message: PushNotificationsFcmDeviceInfoMessage
   ) {
     console.log("Received raw message (watch this):", JSON.stringify(message));
     console.log("Received message:", JSON.stringify(message, null, 2));
+
+    // Adjust this line to handle potential different property names
     const { deviceToken, devicePlatform } = message;
 
     console.log(`Received device info for connection ${connectionId}:`);
@@ -108,7 +111,7 @@ export class FirebaseService implements OnModuleInit {
       console.log("Attempting to set device info with FCM API");
 
       await pushNotificationsFcmApi.setDeviceInfo(connectionId, {
-        deviceToken,
+        deviceToken: deviceToken || "",
         devicePlatform: devicePlatform || "android",
       });
 
@@ -127,25 +130,26 @@ export class FirebaseService implements OnModuleInit {
       throw error;
     }
   }
+
   //we may eventually merge with handleSetDeviceInfo
   async saveDeviceToken(
     connectionId: string,
     deviceToken: string,
-    platform: string
+    devicePlatform: string
   ) {
-    if (!connectionId || !deviceToken || !platform) {
+    if (!connectionId || !deviceToken || !devicePlatform) {
       throw new Error(
-        "Missing required fields: connectionId, deviceToken, and platform are required"
+        "Missing required fields: connectionId, deviceToken, and devicePlatform are required"
       );
     }
     console.log(`Storing device token for connection: ${connectionId}`);
-    console.log(`Platform: ${platform}`);
+    console.log(`Platform: ${devicePlatform}`);
     console.log(`Device token: ${deviceToken}`);
 
     await this.agent.genericRecords.save({
       content: {
         deviceToken: deviceToken,
-        platform: platform,
+        devicePlatform: devicePlatform,
         updatedAt: new Date().toISOString(),
       },
       tags: {
@@ -155,16 +159,18 @@ export class FirebaseService implements OnModuleInit {
     console.log(`Device token stored for connection: ${connectionId}`);
 
     try {
-      if (platform.toLowerCase() === "android") {
+      if (devicePlatform.toLowerCase() === "android") {
         console.log(`Sending FCM device info for Android device`);
-        await this.sendFcmDeviceInfo(connectionId, deviceToken);
-      } else if (platform.toLowerCase() === "ios") {
+        await this.sendFcmDeviceInfo(connectionId, deviceToken, devicePlatform);
+      } else if (devicePlatform.toLowerCase() === "ios") {
         console.log(`Sending APNS device info for iOS device`);
         await this.sendApnsDeviceInfo(connectionId, deviceToken);
       } else {
-        console.warn(`Unknown platform: ${platform}. Device info not sent.`);
+        console.warn(
+          `Unknown platform: ${devicePlatform}. Device info not sent.`
+        );
         this.deviceTokens.delete(connectionId);
-        throw new Error(`Unsupported platform: ${platform}`);
+        throw new Error(`Unsupported platform: ${devicePlatform}`);
       }
       console.log(
         `Successfully processed device token for connection: ${connectionId}`
@@ -183,8 +189,8 @@ export class FirebaseService implements OnModuleInit {
         console.log(`Removed invalid token for connection: ${connectionId}`);
       } else {
         this.deviceTokens.set(connectionId, {
-          token: deviceToken,
-          platform,
+          deviceToken,
+          devicePlatform,
           status: "unprocessed",
         });
         console.log(
@@ -209,11 +215,11 @@ export class FirebaseService implements OnModuleInit {
       );
 
       if (records.length > 0) {
-        const { deviceToken, platform } = records[0].content;
+        const { deviceToken, devicePlatform } = records[0].content;
         console.log(`Device token found for connection ${connectionId}:`);
-        console.log(`Platform: ${platform}`);
+        console.log(`Platform: ${devicePlatform}`);
         console.log(`Token: ${deviceToken}`);
-        return { token: deviceToken, platform } as DeviceTokenInfo;
+        return { deviceToken, devicePlatform } as DeviceTokenInfo;
       }
       console.log(`No device token found for connection: ${connectionId}`);
       return null;
@@ -233,7 +239,7 @@ export class FirebaseService implements OnModuleInit {
     }
 
     const message = {
-      token: deviceInfo.token,
+      token: deviceInfo.deviceToken,
       notification: {
         title: this.configService.get<string>("FIREBASE_NOTIFICATION_TITLE"),
         body: this.configService.get<string>("FIREBASE_NOTIFICATION_BODY"),
@@ -280,11 +286,11 @@ export class FirebaseService implements OnModuleInit {
         return null;
       }
       console.log(`Device token found for connection ${connectionId}:`);
-      console.log(`Device Token: ${deviceInfo.token}`);
-      console.log(`Device Platform: ${deviceInfo.platform}`);
+      console.log(`Device Token: ${deviceInfo.deviceToken}`);
+      console.log(`Device Platform: ${deviceInfo.devicePlatform}`);
       return {
-        deviceToken: deviceInfo.token,
-        devicePlatform: deviceInfo.platform,
+        deviceToken: deviceInfo.deviceToken,
+        devicePlatform: deviceInfo.devicePlatform,
       };
     } catch (error) {
       console.error("Error retrieving APNS device info:", error);
@@ -301,6 +307,7 @@ export class FirebaseService implements OnModuleInit {
       `Attempting to send FCM device info for connection: ${connectionId}`
     );
     console.log(`Device token: ${deviceToken}`);
+    console.log(`Device platform: ${devicePlatform}`);
 
     try {
       const agentContext =
@@ -353,8 +360,8 @@ export class FirebaseService implements OnModuleInit {
       }
       console.log(`Device info retrieved: ${JSON.stringify(deviceInfo)}`);
       return {
-        deviceToken: deviceInfo.token,
-        devicePlatform: deviceInfo.platform,
+        deviceToken: deviceInfo.deviceToken,
+        devicePlatform: deviceInfo.devicePlatform,
       };
     } catch (error) {
       console.error(
